@@ -1,0 +1,42 @@
+From b99e034e9696f745d8da4742251bb538e0841f63 Mon Sep 17 00:00:00 2001
+From: Alan Modra <amodra@gmail.com>
+Date: Sun, 8 Nov 2015 09:29:00 -0800
+Subject: [PATCH 05/11] ELF unexec: Symbol table patching
+
+No st_shndx value larger than SHN_LORESERVE should be changed.
+* unexelf.c (unexec): Don't adjust any st_shndx larger than
+SHN_LORESERVE.  Error on SHN_XINDEX.
+---
+ src/unexelf.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/src/unexelf.c b/src/unexelf.c
+index 0065491..286ba2e 100644
+--- a/src/unexelf.c
++++ b/src/unexelf.c
+@@ -1118,7 +1118,7 @@ temacs:
+ 	}
+ #endif /* __sgi */
+ 
+-      /* If it is the symbol table, its st_shndx field needs to be patched.  */
++      /* Patch st_shndx field of symbol table.  */
+       if (new_shdr->sh_type == SHT_SYMTAB
+ 	  || new_shdr->sh_type == SHT_DYNSYM)
+ 	{
+@@ -1126,9 +1126,10 @@ temacs:
+ 	  ElfW (Sym) *sym = (ElfW (Sym) *) (new_shdr->sh_offset + new_base);
+ 	  for (; num--; sym++)
+ 	    {
+-	      if ((sym->st_shndx == SHN_UNDEF)
+-		  || (sym->st_shndx == SHN_ABS)
+-		  || (sym->st_shndx == SHN_COMMON))
++	      if (sym->st_shndx == SHN_XINDEX)
++		fatal ("SHT_SYMTAB_SHNDX unsupported");
++	      if (sym->st_shndx == SHN_UNDEF
++		  || sym->st_shndx >= SHN_LORESERVE)
+ 		continue;
+ 
+ 	      PATCH_INDEX (sym->st_shndx);
+-- 
+2.7.4
+

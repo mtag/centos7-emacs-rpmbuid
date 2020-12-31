@@ -1,0 +1,300 @@
+From 59fd52bfdd7e4a763b5d950ee2213b3bb1e69916 Mon Sep 17 00:00:00 2001
+From: Jan Synacek <jsynacek@redhat.com>
+Date: Tue, 11 Sep 2018 13:03:56 +0200
+Subject: [PATCH 1/2] New verify-error GnuTLS interface for certificate
+ validation
+
+* net/gnutls.el (gnutls-verify-error): New defcustom to control
+the behavior when a certificate fails validation.  Defaults to
+old behavior: never abort, just warn.
+(gnutls-negotiate): Use it.
+
+* gnutls.c: Replace `:verify_hostname_error' with `:verify_error',
+now a list of certificate validation checks that will abort a
+connection with an error.
+(Fgnutls_boot): Document it and use it.
+
+(cherry-picked from commit 31b4827ea9ba8d22deb17c0593f0f555a33e1fa4)
+
+jsynacek: gnutls-verify-error defaults to t in RHEL-7.
+
+Resolves: #1403643
+---
+ lisp/net/gnutls.el  |  67 ++++++++++++++++++++++++++++++++++++++++------------
+ src/bootstrap-emacs | Bin 25556936 -> 0 bytes
+ src/emacs           | Bin 25556936 -> 0 bytes
+ src/fns.c           |  22 ++++++++++++++++-
+ src/gnutls.c        |  48 +++++++++++++++++++++++--------------
+ src/temacs          | Bin 15992560 -> 0 bytes
+ 6 files changed, 103 insertions(+), 34 deletions(-)
+ delete mode 100755 src/bootstrap-emacs
+ delete mode 100755 src/emacs
+ delete mode 100755 src/temacs
+
+diff --git a/lisp/net/gnutls.el b/lisp/net/gnutls.el
+index 243c64e..2585f48 100644
+--- a/lisp/net/gnutls.el
++++ b/lisp/net/gnutls.el
+@@ -51,6 +51,19 @@ set this variable to \"normal:-dhe-rsa\"."
+   :type '(choice (const nil)
+                  string))
+ 
++(defcustom gnutls-verify-error t
++  "If non-nil, this should be a list of checks per hostname regex or t."
++  :group 'gnutls
++  :type '(choice
++          (const t)
++          (repeat :tag "List of hostname regexps with flags for each"
++           (list
++            (choice :tag "Hostname"
++                    (const ".*" :tag "Any hostname")
++                    regexp)
++            (set (const :trustfiles)
++                 (const :hostname))))))
++
+ (defcustom gnutls-trustfiles
+   '(
+     "/etc/ssl/certs/ca-certificates.crt" ; Debian, Ubuntu, Gentoo and Arch Linux
+@@ -141,19 +154,25 @@ MIN-PRIME-BITS is the minimum acceptable size of Diffie-Hellman keys
+ \(see `gnutls-min-prime-bits' for more information).  Use nil for the
+ default.
+ 
+-When VERIFY-HOSTNAME-ERROR is not nil, an error will be raised
+-when the hostname does not match the presented certificate's host
+-name.  The exact verification algorithm is a basic implementation
+-of the matching described in RFC2818 (HTTPS), which takes into
+-account wildcards, and the DNSName/IPAddress subject alternative
+-name PKIX extension.  See GnuTLS' gnutls_x509_crt_check_hostname
+-for details.  When VERIFY-HOSTNAME-ERROR is nil, only a warning
+-will be issued.
++VERIFY-HOSTNAME-ERROR is a backwards compatibility option for
++putting `:hostname' in VERIFY-ERROR.
++
++When VERIFY-ERROR is t or a list containing `:trustfiles', an
++error will be raised when the peer certificate verification fails
++as per GnuTLS' gnutls_certificate_verify_peers2.  Otherwise, only
++warnings will be shown about the verification failure.
+ 
+-When VERIFY-ERROR is not nil, an error will be raised when the
+-peer certificate verification fails as per GnuTLS'
+-gnutls_certificate_verify_peers2.  Otherwise, only warnings will
+-be shown about the verification failure.
++When VERIFY-ERROR is t or a list containing `:hostname', an error
++will be raised when the hostname does not match the presented
++certificate's host name.  The exact verification algorithm is a
++basic implementation of the matching described in
++RFC2818 (HTTPS), which takes into account wildcards, and the
++DNSName/IPAddress subject alternative name PKIX extension.  See
++GnuTLS' gnutls_x509_crt_check_hostname for details.  Otherwise,
++only a warning will be issued.
++
++Note that the list in `gnutls-verify-error', matched against the
++HOSTNAME, is the default VERIFY-ERROR.
+ 
+ VERIFY-FLAGS is a numeric OR of verification flags only for
+ `gnutls-x509pki' connections.  See GnuTLS' x509.h for details;
+@@ -186,8 +205,28 @@ defaults to GNUTLS_VERIFY_ALLOW_X509_V1_CA_CRT."
+                                 (if gnutls-algorithm-priority
+                                     (upcase gnutls-algorithm-priority)
+                                   "NORMAL")))))
++         (verify-error (or verify-error
++                           ;; this uses the value of `gnutls-verify-error'
++                           (cond
++                            ;; if t, pass it on
++                            ((eq gnutls-verify-error t)
++                             t)
++                            ;; if a list, look for hostname matches
++                            ((listp gnutls-verify-error)
++                             (mapcan
++                              (lambda (check)
++                                (when (string-match (car check) hostname)
++                                  (cdr check)))
++                              gnutls-verify-error))
++                            ;; else it's nil
++                            (t nil))))
+          (min-prime-bits (or min-prime-bits gnutls-min-prime-bits))
+-         (params `(:priority ,priority-string
++         params ret)
++
++    (when verify-hostname-error
++      (push :hostname verify-error))
++
++    (setq params `(:priority ,priority-string
+                              :hostname ,hostname
+                              :loglevel ,gnutls-log-level
+                              :min-prime-bits ,min-prime-bits
+@@ -196,9 +235,7 @@ defaults to GNUTLS_VERIFY_ALLOW_X509_V1_CA_CRT."
+                              :keylist ,keylist
+                              :verify-flags ,verify-flags
+                              :verify-error ,verify-error
+-                             :verify-hostname-error ,verify-hostname-error
+                              :callbacks nil))
+-         ret)
+ 
+     (gnutls-message-maybe
+      (setq ret (gnutls-boot process type params))
+diff --git a/src/fns.c b/src/fns.c
+index fbb3fb5..2a417ff 100644
+--- a/src/fns.c
++++ b/src/fns.c
+@@ -2252,7 +2252,7 @@ usage: (nconc &rest LISTS)  */)
+  storing the results into elements of VALS, a C vector of Lisp_Objects.
+  LENI is the length of VALS, which should also be the length of SEQ.  */
+ 
+-static void
++static EMACS_INT
+ mapcar1 (EMACS_INT leni, Lisp_Object *vals, Lisp_Object fn, Lisp_Object seq)
+ {
+   register Lisp_Object tail;
+@@ -2326,6 +2326,7 @@ mapcar1 (EMACS_INT leni, Lisp_Object *vals, Lisp_Object fn, Lisp_Object seq)
+     }
+ 
+   UNGCPRO;
++  return leni;
+ }
+ 
+ DEFUN ("mapconcat", Fmapconcat, Smapconcat, 3, 3, 0,
+@@ -2411,6 +2412,24 @@ SEQUENCE may be a list, a vector, a bool-vector, or a string.  */)
+ 
+   return sequence;
+ }
++
++DEFUN ("mapcan", Fmapcan, Smapcan, 2, 2, 0,
++       doc: /* Apply FUNCTION to each element of SEQUENCE, and concatenate
++the results by altering them (using `nconc').
++SEQUENCE may be a list, a vector, a bool-vector, or a string. */)
++     (Lisp_Object function, Lisp_Object sequence)
++{
++  USE_SAFE_ALLOCA;
++  EMACS_INT leni = XFASTINT (Flength (sequence));
++  if (CHAR_TABLE_P (sequence))
++    wrong_type_argument (Qlistp, sequence);
++  Lisp_Object *args;
++  SAFE_ALLOCA_LISP (args, leni);
++  ptrdiff_t nmapped = mapcar1 (leni, args, function, sequence);
++  Lisp_Object ret = Fnconc (nmapped, args);
++  SAFE_FREE ();
++  return ret;
++}
+ 
+ /* This is how C code calls `yes-or-no-p' and allows the user
+    to redefined it.
+@@ -4984,6 +5003,7 @@ this variable.  */);
+   defsubr (&Snconc);
+   defsubr (&Smapcar);
+   defsubr (&Smapc);
++  defsubr (&Smapcan);
+   defsubr (&Smapconcat);
+   defsubr (&Syes_or_no_p);
+   defsubr (&Sload_average);
+diff --git a/src/gnutls.c b/src/gnutls.c
+index 57d9e17..0c4d10b 100644
+--- a/src/gnutls.c
++++ b/src/gnutls.c
+@@ -49,7 +49,7 @@ static Lisp_Object QCgnutls_bootprop_loglevel;
+ static Lisp_Object QCgnutls_bootprop_hostname;
+ static Lisp_Object QCgnutls_bootprop_min_prime_bits;
+ static Lisp_Object QCgnutls_bootprop_verify_flags;
+-static Lisp_Object QCgnutls_bootprop_verify_hostname_error;
++static Lisp_Object QCgnutls_bootprop_verify_error;
+ 
+ /* Callback keys for `gnutls-boot'.  Unused currently.  */
+ static Lisp_Object QCgnutls_bootprop_callbacks_verify;
+@@ -729,8 +729,12 @@ certificates for `gnutls-x509pki'.
+ :verify-flags is a bitset as per GnuTLS'
+ gnutls_certificate_set_verify_flags.
+ 
+-:verify-hostname-error, if non-nil, makes a hostname mismatch an
+-error.  Otherwise it will be just a warning.
++:verify-hostname-error is ignored.  Pass :hostname in :verify-error
++instead.
++
++:verify-error is a list of symbols to express verification checks or
++`t' to do all checks.  Currently it can contain `:trustfiles' and
++`:hostname' to verify the certificate or the hostname respectively.
+ 
+ :min-prime-bits is the minimum accepted number of bits the client will
+ accept in Diffie-Hellman key exchange.
+@@ -774,8 +778,7 @@ one trustfile (usually a CA bundle).  */)
+   /* Lisp_Object callbacks; */
+   Lisp_Object loglevel;
+   Lisp_Object hostname;
+-  /* Lisp_Object verify_error; */
+-  Lisp_Object verify_hostname_error;
++  Lisp_Object verify_error;
+   Lisp_Object prime_bits;
+ 
+   CHECK_PROCESS (proc);
+@@ -800,11 +803,14 @@ one trustfile (usually a CA bundle).  */)
+   keylist               = Fplist_get (proplist, QCgnutls_bootprop_keylist);
+   crlfiles              = Fplist_get (proplist, QCgnutls_bootprop_crlfiles);
+   loglevel              = Fplist_get (proplist, QCgnutls_bootprop_loglevel);
+-  verify_hostname_error = Fplist_get (proplist, QCgnutls_bootprop_verify_hostname_error);
++  verify_error          = Fplist_get (proplist, QCgnutls_bootprop_verify_error);
+   prime_bits            = Fplist_get (proplist, QCgnutls_bootprop_min_prime_bits);
+ 
++  if (!Flistp (verify_error))
++    error ("gnutls-boot: invalid :verify_error parameter (not a list)");
++
+   if (!STRINGP (hostname))
+-    error ("gnutls-boot: invalid :hostname parameter");
++    error ("gnutls-boot: invalid :hostname parameter (not a string)");
+   c_hostname = SSDATA (hostname);
+ 
+   state = XPROCESS (proc)->gnutls_state;
+@@ -1033,14 +1039,17 @@ one trustfile (usually a CA bundle).  */)
+ 
+   if (peer_verification != 0)
+     {
+-      if (NILP (verify_hostname_error))
+-	GNUTLS_LOG2 (1, max_log_level, "certificate validation failed:",
+-		     c_hostname);
+-      else
+-	{
++      if (EQ (verify_error, Qt)
++          || !NILP (Fmember (QCgnutls_bootprop_trustfiles, verify_error)))
++        {
+ 	  emacs_gnutls_deinit (proc);
+ 	  error ("Certificate validation failed %s, verification code %d",
+ 		 c_hostname, peer_verification);
++        }
++      else
++	{
++          GNUTLS_LOG2 (1, max_log_level, "certificate validation failed:",
++                       c_hostname);
+ 	}
+     }
+ 
+@@ -1080,14 +1089,17 @@ one trustfile (usually a CA bundle).  */)
+ 
+       if (!fn_gnutls_x509_crt_check_hostname (gnutls_verify_cert, c_hostname))
+ 	{
+-	  if (NILP (verify_hostname_error))
+-	    GNUTLS_LOG2 (1, max_log_level, "x509 certificate does not match:",
+-			 c_hostname);
+-	  else
+-	    {
++          if (EQ (verify_error, Qt)
++              || !NILP (Fmember (QCgnutls_bootprop_hostname, verify_error)))
++            {
+ 	      fn_gnutls_x509_crt_deinit (gnutls_verify_cert);
+ 	      emacs_gnutls_deinit (proc);
+ 	      error ("The x509 certificate does not match \"%s\"", c_hostname);
++            }
++	  else
++	    {
++              GNUTLS_LOG2 (1, max_log_level, "x509 certificate does not match:",
++                           c_hostname);
+ 	    }
+ 	}
+       fn_gnutls_x509_crt_deinit (gnutls_verify_cert);
+@@ -1144,7 +1156,7 @@ syms_of_gnutls (void)
+   DEFSYM (QCgnutls_bootprop_min_prime_bits, ":min-prime-bits");
+   DEFSYM (QCgnutls_bootprop_loglevel, ":loglevel");
+   DEFSYM (QCgnutls_bootprop_verify_flags, ":verify-flags");
+-  DEFSYM (QCgnutls_bootprop_verify_hostname_error, ":verify-hostname-error");
++  DEFSYM (QCgnutls_bootprop_verify_error, ":verify-error");
+ 
+   DEFSYM (Qgnutls_e_interrupted, "gnutls-e-interrupted");
+   Fput (Qgnutls_e_interrupted, Qgnutls_code,
+

@@ -1,0 +1,24 @@
+Based on the upstream commit ff3878d749591ebf78da532ec1eb6fa00cb5757d.
+
+http://lists.gnu.org/archive/html/emacs-diffs/2015-03/msg00224.html
+
+Resolves: #1487557
+
+--- a/configure	2017-09-15 16:21:24.912133006 +0200
++++ b/configure	2017-09-15 16:26:00.869651920 +0200
+@@ -12583,11 +12583,13 @@
+     cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+ #include <jpeglib.h>
+-	 version=JPEG_LIB_VERSION
++	 #if JPEG_LIB_VERSION >= 62
++	 version 6b or later
++	 #endif
+ 
+ _ACEOF
+ if (eval "$ac_cpp conftest.$ac_ext") 2>&5 |
+-  $EGREP "version= *(6[2-9]|[7-9][0-9])" >/dev/null 2>&1; then :
++  $EGREP "version 6b or later" >/dev/null 2>&1; then :
+   $as_echo "#define HAVE_JPEG 1" >>confdefs.h
+ 
+ else

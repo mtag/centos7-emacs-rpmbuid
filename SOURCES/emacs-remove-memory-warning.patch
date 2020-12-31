@@ -1,0 +1,13 @@
+diff --git a/src/vm-limit.c b/src/vm-limit.c
+index ca7ac4f..78fa702 100644
+--- a/src/vm-limit.c
++++ b/src/vm-limit.c
+@@ -292,7 +292,7 @@ memory_warnings (POINTER start, void (*warnfun) (const char *))
+   else
+     data_space_start = start_of_data ();
+ 
+-  warn_function = warnfun;
++  warn_function = NULL;
+   __after_morecore_hook = check_memory_limits;
+ 
+   /* Force data limit to be recalculated on each run.  */

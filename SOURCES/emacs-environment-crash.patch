@@ -1,0 +1,94 @@
+Upstream report: http://debbugs.gnu.org/cgi/bugreport.cgi?bug=13054
+Upstream commit: 21e54a94d7527e07ddc37066c8cb488f478339c9
+Resolves: #1308518
+
+--- emacs-24.3/src/callproc.c	2013-02-02 04:20:04.000000000 +0100
++++ emacs-24.3-new/src/callproc.c	2016-02-29 08:24:53.628487375 +0100
+@@ -491,9 +491,6 @@ usage: (call-process PROGRAM &optional I
+     }
+ 
+   {
+-    /* child_setup must clobber environ in systems with true vfork.
+-       Protect it from permanent change.  */
+-    register char **save_environ = environ;
+     register int fd1 = fd[1];
+     int fd_error = fd1;
+ 
+@@ -640,8 +637,6 @@ usage: (call-process PROGRAM &optional I
+       emacs_close (fd_error);
+ #endif /* not MSDOS */
+ 
+-    environ = save_environ;
+-
+     /* Close most of our fd's, but not fd[0]
+        since we will use that to read input from.  */
+     emacs_close (filefd);
+@@ -1098,10 +1093,6 @@ add_env (char **env, char **new_env, cha
+    Initialize inferior's priority, pgrp, connected dir and environment.
+    then exec another program based on new_argv.
+ 
+-   This function may change environ for the superior process.
+-   Therefore, the superior process must save and restore the value
+-   of environ around the vfork and the call to this function.
+-
+    If SET_PGRP, put the subprocess into a separate process group.
+ 
+    CURRENT_DIR is an elisp string giving the path of the current
+@@ -1308,11 +1299,7 @@ child_setup (int in, int out, int err, c
+   /* setpgrp_of_tty is incorrect here; it uses input_fd.  */
+   tcsetpgrp (0, pid);
+ 
+-  /* execvp does not accept an environment arg so the only way
+-     to pass this environment is to set environ.  Our caller
+-     is responsible for restoring the ambient value of environ.  */
+-  environ = env;
+-  execvp (new_argv[0], new_argv);
++  execve (new_argv[0], new_argv, env);
+ 
+   emacs_write (1, "Can't exec program: ", 20);
+   emacs_write (1, new_argv[0], strlen (new_argv[0]));
+--- emacs-24.3/src/process.c	2013-01-01 21:37:17.000000000 +0100
++++ emacs-24.3-new/src/process.c	2016-02-29 08:23:23.218671832 +0100
+@@ -1606,9 +1606,6 @@ create_process (Lisp_Object process, cha
+   volatile int pty_flag = 0;
+   volatile Lisp_Object lisp_pty_name = Qnil;
+   volatile Lisp_Object encoded_current_dir;
+-#if HAVE_WORKING_VFORK
+-  char **volatile save_environ;
+-#endif
+ 
+   inchannel = outchannel = -1;
+ 
+@@ -1728,12 +1725,6 @@ create_process (Lisp_Object process, cha
+   pthread_sigmask (SIG_BLOCK, &blocked, 0);
+ #endif
+ 
+-#if HAVE_WORKING_VFORK
+-  /* child_setup must clobber environ on systems with true vfork.
+-     Protect it from permanent change.  */
+-  save_environ = environ;
+-#endif
+-
+ #ifndef WINDOWSNT
+   pid = vfork ();
+   if (pid == 0)
+@@ -1875,10 +1866,6 @@ create_process (Lisp_Object process, cha
+ 
+   /* Back in the parent process.  */
+ 
+-#if HAVE_WORKING_VFORK
+-  environ = save_environ;
+-#endif
+-
+   XPROCESS (process)->pid = pid;
+ 
+   /* Stop blocking signals in the parent.  */
+@@ -1928,7 +1915,7 @@ create_process (Lisp_Object process, cha
+       /* Wait for child_setup to complete in case that vfork is
+ 	 actually defined as fork.  The descriptor wait_child_setup[1]
+ 	 of a pipe is closed at the child side either by close-on-exec
+-	 on successful execvp or the _exit call in child_setup.  */
++	 on successful execve or the _exit call in child_setup.  */
+       {
+ 	char dummy;
+ 

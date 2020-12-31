@@ -1,0 +1,61 @@
+From acfdfce2687342a119d4fe7cae8f5d04550a9d4a Mon Sep 17 00:00:00 2001
+From: Alan Modra <amodra@gmail.com>
+Date: Sun, 8 Nov 2015 09:28:59 -0800
+Subject: [PATCH 02/11] ELF unexec: Correct section header index
+
+First a small fix.  The code incorrectly uses "NEW_SECTION_H (n)" when
+it should have been using "NEW_SECTION_H (nn)" to find the name of the
+section currently being processed.  Of course, before the bss
+sections, n and nn have the same value, so this doesn't matter except
+in the case of .sbss.  For .sbss this probably meant .bss (most likely
+the next section) was copied from memory.  A later patch removes the
+bogus .sbss handling anyway.
+
+* unexelf.c (unexec): Use correct index to look up names.
+---
+ src/unexelf.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/src/unexelf.c b/src/unexelf.c
+index 483da6e..1699f31 100644
+--- a/src/unexelf.c
++++ b/src/unexelf.c
+@@ -1015,12 +1015,12 @@ temacs:
+       /* Write out the sections. .data and .data1 (and data2, called
+ 	 ".data" in the strings table) get copied from the current process
+ 	 instead of the old file.  */
+-      if (!strcmp (old_section_names + NEW_SECTION_H (n).sh_name, ".data")
+-	  || !strcmp ((old_section_names + NEW_SECTION_H (n).sh_name),
++      if (!strcmp (old_section_names + NEW_SECTION_H (nn).sh_name, ".data")
++	  || !strcmp ((old_section_names + NEW_SECTION_H (nn).sh_name),
+ 		      ".sdata")
+-	  || !strcmp ((old_section_names + NEW_SECTION_H (n).sh_name),
++	  || !strcmp ((old_section_names + NEW_SECTION_H (nn).sh_name),
+ 		      ".lit4")
+-	  || !strcmp ((old_section_names + NEW_SECTION_H (n).sh_name),
++	  || !strcmp ((old_section_names + NEW_SECTION_H (nn).sh_name),
+ 		      ".lit8")
+ 	  /* The conditional bit below was in Oliva's original code
+ 	     (1999-08-25) and seems to have been dropped by mistake
+@@ -1043,14 +1043,14 @@ temacs:
+ 	     loader, but I never got anywhere with an SGI support call
+ 	     seeking clues.  -- fx 2002-11-29.  */
+ #ifdef IRIX6_5
+-	  || !strcmp ((old_section_names + NEW_SECTION_H (n).sh_name),
++	  || !strcmp ((old_section_names + NEW_SECTION_H (nn).sh_name),
+ 		      ".got")
+ #endif
+-	  || !strcmp ((old_section_names + NEW_SECTION_H (n).sh_name),
++	  || !strcmp ((old_section_names + NEW_SECTION_H (nn).sh_name),
+ 		      ".sdata1")
+-	  || !strcmp ((old_section_names + NEW_SECTION_H (n).sh_name),
++	  || !strcmp ((old_section_names + NEW_SECTION_H (nn).sh_name),
+ 		      ".data1")
+-	  || !strcmp ((old_section_names + NEW_SECTION_H (n).sh_name),
++	  || !strcmp ((old_section_names + NEW_SECTION_H (nn).sh_name),
+ 		      ".sbss"))
+ 	src = (caddr_t) OLD_SECTION_H (n).sh_addr;
+       else
+-- 
+2.7.4
+
