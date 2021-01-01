@@ -5,6 +5,8 @@
 
 * buildにはcentos:centos7 のcontainerで実行しており、centosのデフォルトの状態でRPM作成・インストールができることを担保している。
 
+  - 用途上必要性はないが、root権限を前提としており、OpenShiftのデフォルト権限設定では動かないはず。
+
 ## build用docker imageの作成
 
 ```
