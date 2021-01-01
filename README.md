@@ -15,7 +15,7 @@ $ docker build . -t centos7-rpmbuild:latest
 
 * emacsのDokcerでのbuildではrandomize_va_spaceを0にする必要がある.
   - [Docker上のEmacsのビルドでハマった話](https://eshamster.hatenablog.com/entry/2016/07/03/125925)を参照。ありがとうございます。
-  - 同じ追記によると不用になったとあったが、当方の環境ではまだ必要だった。
+    + 追記によると不用になったとあったが、当方の環境ではまだ必要だった。
   
 ```
 $ sudo sh -c "echo 0 > /proc/sys/kernel/randomize_va_space"
