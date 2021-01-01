@@ -26,7 +26,7 @@ $ sudo sh -c "echo 0 > /proc/sys/kernel/randomize_va_space"
   + specファイル名でrpmが作成される想定。
     - 名称が異るばあいはbuild.shを修正するか、その内容を```sh -c "rpmbuild && ..."```のように指定してrunする
     - またはsh -c "sleep 36000"などとして、内部でコマンドを実行する。
-    - 繰り返し実行する場合、yum-builddepまでの状態のコンテナを作成したほうが時間の節約になる。
+  * 繰り返し実行する場合、yum-builddepまでの状態のコンテナを作成したほうが時間の節約になる。
     - gccなど最低限をインストール済みのコンテナを作ることも検討
     
 ```
