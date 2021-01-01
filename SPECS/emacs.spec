@@ -56,7 +56,7 @@ Source7:        emacs-terminal.sh
 # Fix for emacs bug #827033
 #Patch101:       emacs-24.3-hunspell.2.patch
 
-
+BuildRequires: gcc libgcc
 BuildRequires:  atk-devel cairo-devel freetype-devel fontconfig-devel dbus-devel giflib-devel glibc-devel libpng-devel
 BuildRequires:  libjpeg-devel libtiff-devel libX11-devel libXau-devel libXdmcp-devel libXrender-devel libXt-devel
 BuildRequires:  libXpm-devel ncurses-devel xorg-x11-proto-devel zlib-devel gnutls-devel
