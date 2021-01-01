@@ -480,6 +480,7 @@ update-desktop-database &> /dev/null || :
 #%{_datadir}/icons/hicolor/*/apps/emacs22.png
 %{_datadir}/icons/hicolor/scalable/apps/emacs.svg
 %{_datadir}/icons/hicolor/scalable/mimetypes/emacs-document.svg
+%{_datadir}/icons/hicolor/scalable/mimetypes/emacs-document23.svg
 
 %files nox
 %{_bindir}/emacs-%{version}-nox
@@ -513,9 +514,14 @@ update-desktop-database &> /dev/null || :
 %{_datadir}/applications/emacs-terminal.desktop
 
 %files filesystem
-%dir %{_datadir}/emacs
-%dir %{_datadir}/emacs/site-lisp
+%{_datadir}/emacs/site-lisp/subdirs.el
 %dir %{_datadir}/emacs/site-lisp/site-start.d
+
+%{_includedir}/emacs-module.h
+
+%{_libdir}/systemd/user/emacs.service
+
+%{_datadir}/metainfo/emacs.appdata.xml
 
 %changelog
 * Fri Nov 01 2019 Tomas Pelka <tpelka@redhat.com> - 1:24.3-23
