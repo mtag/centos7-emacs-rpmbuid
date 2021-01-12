@@ -7,6 +7,8 @@
 
   - 用途上必要性はないが、root権限を前提としており、OpenShiftのデフォルト権限設定では動かないはず。
 
+* おまけでlhaのRPM作成specをつけている
+
 ## build用docker imageの作成
 
 ```
