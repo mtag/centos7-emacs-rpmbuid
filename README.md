@@ -26,7 +26,8 @@ $ sudo sh -c "echo 0 > /proc/sys/kernel/randomize_va_space"
   + specファイル名でrpmが作成される想定。
     - 名称が異るばあいはbuild.shを修正するか、その内容を```sh -c "rpmbuild && ..."```のように指定してrunする
 ```
-docker run --rm -v $(pwd):/root/rpmbuild centos7-rpmbuild:latest /root/build.sh emacs
+$ cd rpmbuild
+$ docker run --rm -v $(pwd):/root/rpmbuild centos7-rpmbuild:latest /root/build.sh emacs
 ```
 
 * build後、元にもどしておく
