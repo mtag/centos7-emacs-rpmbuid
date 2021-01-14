@@ -1,5 +1,7 @@
 # centos7用emacs26.3 RPMの作成
 
+  cenots7のemacsがさすがに古すぎるが、rpm化しないといろいろ面倒なので作成。
+
 * centos7のemacs24のsrc.rpmからspecを取り出し、26.3でbuildが通るようにした。
   - 起動するかの検証のみ
 
